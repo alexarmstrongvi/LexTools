@@ -54,12 +54,6 @@ R_TAGS  = {'r7409'  : (200, ''), #https://its.cern.ch/jira/browse/ATLMCPROD-2394
            'r10371' : (140, 12),
            'r10372' : (140, 5),
            'r10373' : ('', '')}
-
-# Base link to AMI tag info
-# Get full link by appending underscore seperated list of tags
-AMI_TAG_INFO_LINK = "https://ami.in2p3.fr/app?subapp=tagsShow&userdata="
-MUTRIGNT_TAGS = ['e','s','r','f','m']
-
 ################################################################################
 def main ():
     """ Main Function """ 
@@ -77,7 +71,7 @@ def main ():
     # Extract sample names
     samples = []
     if args.mutrignt:
-        columns = ['DID', 'Group', 'nEvents', 'nFiles', 'Size(%s)'%args.units, 'AMI Tag Info Link', '<mu>', 'CavernBkgd', ]
+        columns = ['DID', 'Group', 'nEvents', 'nFiles', 'Size(%s)'%args.units, '<mu>', 'CavernBkgd', ]
     else:
         columns = ['DID', 'nEvents', 'nFiles', 'Size(%s)'%args.units]
     df_samples = pd.DataFrame(columns=columns)
@@ -134,7 +128,7 @@ def main ():
         cols_to_fill = ['nFiles', 'Size(%s)'%args.units, 'nEvents']
         df_samples.loc[sample, cols_to_fill] = get_file_info(sample) 
         RSE_info = get_rse_info(sample)
-        for ii, (rse, info) in enumerate(sorted(RSE_info.iteritems())):
+        for ii, (rse, info) in enumerate(RSE_info.iteritems()):
             df_key = 'RSE %d'%ii if ii else 'RSE'
             if df_key not in df_samples.columns:
                 df_samples[df_key] = ''
@@ -143,7 +137,7 @@ def main ():
 
         if args.mutrignt:
             mutrig_info = get_mutrignt_info(sample) 
-            df_samples.loc[sample]['AMI Tag Info Link','<mu>','CavernBkgd'] = mutrig_info 
+            df_samples.loc[sample]['<mu>','CavernBkgd'] = mutrig_info 
             df_samples.loc[sample]['Group'] = get_mutrig_did_group(sample)
             
         ofile.write('SAMPLE: %s\n'%sample)
@@ -218,35 +212,21 @@ def get_mutrignt_info(did):
     returns:
         (int) : average pileup 
         (int) : cavern background
-        (str) : hyperlink for AMI Tag info, formatted for google sheets
         Return values are empty strings if not rTag not known 
     """
     # Skip data files or files without DSIDs
     dsid = tools.get_dsid_from_sample(did)
-    if not dsid: mu, cavern_bkgd = '-', '-'
-
+    if not dsid: return '-','-'
     is_data = did[did.find(dsid)-2:did.find(dsid)] == '00'
-    if is_data: mu, cavern_bkgd = '-', '-'
-    else:
-        # Get pileup and cavern background 
-        for r_tag, (mu, cavern_bkgd) in R_TAGS.iteritems():
-            if r_tag in did: break
-        else:
-            print "No known r-tags found in sample:", did
-            mu, cavern_bkgd = '', ''
+    if is_data: return '-','-'
 
-    # Get AMI link for all tags
-    tags_to_check = "".join(MUTRIGNT_TAGS)
-    tags = [x for x in did.split('.') if re.search("[%s][0-9]{2}"%(tags_to_check),x)] 
-    if not tags:
-        sheets_formula = '-'
+    # Get pileup and cavern background 
+    for r_tag, (mu, cavern_bkgd) in R_TAGS.iteritems():
+        if r_tag in did: break
     else:
-        tags = [x for x in tags[0].split("_") if re.search("[%s][0-9]{2}"%(tags_to_check),x)]
-        tag_str = "_".join(tags)
-        ami_link = "%s%s"%(AMI_TAG_INFO_LINK, tag_str)
-        sheets_formula = "=HYPERLINK(\"%s\", \"AMI Tag Info Link\")"%ami_link
-
-    return sheets_formula, mu, cavern_bkgd
+        print "No known r-tags found in sample:", did
+        mu, cavern_bkgd = '', ''
+    return mu, cavern_bkgd
 
 def get_mutrig_did_group(did):
     """

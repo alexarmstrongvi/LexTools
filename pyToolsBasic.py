@@ -5,6 +5,7 @@ import glob
 import re
 import subprocess
 from contextlib import contextmanager
+import itertools
 
 def main():
     print "Testing Tools"
@@ -39,28 +40,43 @@ def rucio_is_setup() :
 
 def grid_proxy_setup() :
     print "Checking for valid grid proxy"
-    default = ""
-    proxy = os.getenv('X509_USER_PROXY', default)
-    if proxy == default :
+    def print_fail_msg():
         print "ERROR grid proxy is not setup, please set one up before running this script"
+        print "Run : voms-proxy-init -voms atlas -valid 96:00"
         return False
-    else :
-        print " > proxy found: %s"%proxy
+        
+    proxy = os.getenv('X509_USER_PROXY') 
+    if not proxy: print_fail_msg()
+    for line in get_cmd_output('voms-proxy-info'):
+        if 'timeleft' in line: break
+    else: 
+        print_fail_msg()
+    hours_left = int(line.strip().split(':')[1])
+    if hours_left == 0: 
+        print_fail_msg()
+    else:
+        print "grid proxy found (%d hour(s) left): %s"%(hours_left, proxy)
         return True
 
-def get_cmd_output(cmd):
+def get_cmd_output(cmd, print_output=False):
     """ Return output from shell command """
     tmp_file_dump = 'tmp_shell_command_dump.txt'
-    shell_cmd = '%s > %s'%(cmd, tmp_file_dump)
-    print "TESTING :: Running shell"
+    if print_output:
+        shell_cmd = '%s |& tee %s'%(cmd, tmp_file_dump)
+    else:
+        shell_cmd = '%s &> %s'%(cmd, tmp_file_dump)
+
     subprocess.call(shell_cmd, shell=True)
-    print "TESTING :: Ran shell"
     output = []
     with open(tmp_file_dump,'r') as f:
         output = f.readlines() 
     shell_cmd = 'rm %s'%tmp_file_dump
     subprocess.call(shell_cmd, shell=True) 
     return output
+
+def strip_ansi_escape(string):
+    ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+    return ansi_escape.sub('', string)
 
 def check_dir(path):
     if not os.path.isdir(path):
@@ -254,7 +270,12 @@ def get_dsid_sample_map(sample_list):
         if not dsid:
             continue
         if dsid in dsid_sample_map:
-            print 'WARNING :: DSID %s is duplicated'%dsid
+            print 'WARNING :: DSID %s is duplicated. Overwriting'%dsid
+            #for ii in itertools.count(start=1):
+            #    dsid_new_name = "%s-%s"%(dsid, ii)
+            #    if dsid_new_name in dsid_sample_map: continue
+            #    dsid = dsid_new_name
+            #    break
         dsid_sample_map[dsid] = sample
     return dsid_sample_map
 
@@ -305,12 +326,16 @@ def get_sample_group(sample):
     searches['Znunu'] = [['Znunu']]
     # W + jets
     searches['Wjets'] = [['Wplus','Wminus','W(e|mu|tau)nu']]
+    # W + gamma
+    searches['Wgamma'] = [['e', 'mu'],['nu'],['gamma']]
     # ttbar
-    searches['ttbar'] = [['ttbar']]
+    searches['ttbar'] = [['ttbar','ttW']]
     # single top
-    searches['Single top'] = [['top','antitop','atop']]
+    searches['Single top'] = [['!Wt'],['top','antitop','atop']]
+    # Wt
+    searches['Vt'] = [['Wt','tW','tZ','Zt'],['top','antitop','atop','noAllHad']]
     # Diboson
-    searches['Diboson'] = [['!H125'],['WW','ZZ','WZ','ZW','[lv]{4}','[WZ][pqlv]*[WZ]']]
+    searches['Diboson'] = [['!H125'],['!ttbar'],['WW','ZZ','WZ','ZW','[lv]{4}','[WZ][pqlv]*[WZ]']]
     # Signal: LFV Higgs
     searches['LFV Higgs'] = [['H125'],['taue','etau','mutau','taumu','emu','mue']]
 
