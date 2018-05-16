@@ -78,3 +78,20 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
 fi
 return 1
 }
+
+# Utilities
+remove_PATH_duplicates() {
+    if is_not_empty "$PATH"; then
+      old_PATH=$PATH:; PATH=
+      while is_not_empty "$old_PATH"; do
+        x=${old_PATH%%:*}       # the first remaining entry
+        case $PATH: in
+          *:"$x":*) ;;         # already there
+          *) PATH=$PATH:$x;;    # not there yet
+        esac
+        old_PATH=${old_PATH#*:}
+      done
+      PATH=${PATH#:}
+      unset old_PATH x
+    fi
+}
