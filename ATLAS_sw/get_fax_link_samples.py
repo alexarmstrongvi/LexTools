@@ -1,8 +1,11 @@
 #!/usr/bin/env python
+import pdb
 """
 ================================================================================
 
-Creates txt files of fax links to all files in each of the provided datasets
+get_fax_link_samples.py
+
+Creates txt file of fax links for all files in each of the provided datasets
 
 Examples:
     Simple use cases:
@@ -39,51 +42,59 @@ from collections import namedtuple, Counter
 EXPECTED_REPLICA_INFO = ['SCOPE', 'NAME', 'FILESIZE', 'ADLER32', 'RSE: REPLICA']
 REPLICA_INFO = ['scope', 'name', 'filesize', 'adler32', 'rse', 'link']
 MISSING_FILE_INFO = ['SCOPE', 'NAME']
+SAMPLE_NOT_FOUND_ERROR = 'ERROR\tData identifier not found'
 
 ################################################################################
-def main ():
+def main():
     """ Main Function """
 
     global args
     check_environment()
 
+    print "===== Getting Sample Links =====" 
     # Get DIDs from inputs
     if args.ifile_name:
         did_list = get_did_list_from_file(args.ifile_name)
     if args.input_samples:
         did_list = args.input_samples
 
-    print "TESTING :: did_list = ", did_list
-    sys.exit() #TESTING
-
     # Get DID fax links and write to output file
     n_dids = len(did_list)
     for ii, did in enumerate(did_list):
-        print "INFO :: [%d/%d] Getting links for %s"%(ii, n_dids, did)
+        print "[%d/%d] Getting links for %s"%(ii+1, n_dids, did)
         links = get_did_links(did, args.rse_sites)
+        if not links: continue
 
         # Note if any files are missing
-        if args.missing
+        if args.missing:
             missing_links = get_missing_links(did, args.rse_sites)
             # TODO: Add colors to output
             if missing_links:
                 n_missing = len(missing_links)
                 n_total = len(missing_links) + len(links)
-                print "WARNING :: \tunable to find %d/%d files"%(n_missing, n_total)
+                print "WARNING :: unable to find %d/%d files"%(n_missing, n_total)
             else:
-                print "INFO :: \tNo missing links"
+                print "INFO :: No missing links"
 
         ofile_name = get_ofile_name(did)
 
-        with ofile as open(ofile_name,'w'):
+        while os.path.exists(ofile_name) and not args.overwrite:
+            file_name_short = ofile_name.split('/')[-1]
+            print "WARNING :: Output file already exists:", file_name_short
+            ofile_name = ofile_name.replace('.txt','_new.txt')
+            file_name_short = ofile_name.split('/')[-1]
+            print "WARNING :: Storing as", file_name_short
+
+        with open(ofile_name,'w') as ofile:
             for link in links:
                 ofile.write("%s\n"%link)
 
     # Finalize
-    if args.output_dir = './':
-        print "FINISHED :: Outputs stored in current directory"
+    if args.output_dir == './':
+        print "\nOutputs stored in current directory"
     else:
-        print "FINISHED :: Outputs stored at %s"args.output_dir
+        print "\nOutputs stored at %s"%os.path.abspath(args.output_dir)
+    print "===== COMPLETED ====="
 
 
 ################################################################################
@@ -108,7 +119,7 @@ class FileReplicaInfo:
                 and self.link == other.link)
 
 
-        def determine_rank(rse_sites):
+        def determine_rank(self, rse_sites):
             # Rank is determined by the order of rse_site provided by the user
             try:
                 self.rank = rse_sites.index(self.rse)
@@ -122,11 +133,11 @@ MissingFileInfo = namedtuple("MissingFileInfo",MISSING_FILE_INFO)
 ################################################################################
 # HELPER FUNCTIONS
 
-get_did_links(did, rse_sites):
+def get_did_links(did, rse_sites):
     """
     """
     rucio_cmd = 'rucio list-file-replicas %s'%did
-    rucio_cmd += ' -protocols root'
+    rucio_cmd += ' --protocols root'
 
     output = []
     if not rse_sites:
@@ -140,22 +151,20 @@ get_did_links(did, rse_sites):
     links = [x.link for x in replica_files]
     return links
 
-remove_duplicates(replica_files, rse_sites = []):
+def remove_duplicates(replica_files, rse_sites = []):
     """
     """
+    # Get list of all rse sites ordered by number of files at that site
+    rse_count = Counter([x.rse for x in replica_files])
     if not rse_sites:
-        # Get list of all rse sites ordered by number of files at that site
-        rse_count = Counter([x.rse for x in replica_files])
         rse_sites = [x[0] for x in rse_count.most_common()]
-
-    for file in replica_files:
-        file.determine_rank(rse_sites)
-        if file.rank < 0:
-            "TESTING :: Rank not being set properly"
+        
+    for file1 in replica_files:
+        file1.determine_rank(rse_sites)
 
     replica_files_no_duplicates = []
     for file1 in replica_files:
-        for file 2 in replica_files:
+        for file2 in replica_files:
             if file1 == file2 or file1.name != file2.name: continue
             # larger rank value -> lower rank
             if file1.rank > file2.rank: break
@@ -165,17 +174,28 @@ remove_duplicates(replica_files, rse_sites = []):
             # Store if no files are found with a higher rank
             replica_files_no_duplicates.append(file1)
 
+    if len(replica_files_no_duplicates) != len(replica_files):
+        # Check if all sites occur equally frequently
+        if len(set([x[1] for x in rse_count.most_common()])) == 1:
+            print "INFO :: All dataset files replicated",
+            print "on multiple sites: %s."%str(rse_sites),
+            print "All links will be for", rse_sites[0]
+        else:
+            print "INFO :: Some dataset files are replicated on multiple sites:",
+            print "Order of preference is", rse_sites
+
     return replica_files_no_duplicates
 
-get_rse_specified_output(rucio_cmd, rse_sites, missing=False):
+def get_rse_specified_output(rucio_cmd, rse_sites, missing=False):
+    output = []
     for rse in rse_sites:
-        if len(rse_sites) > 1:
-            print "INFO :: \tLooking at RSE: %s"%rse
-        rucio_rse_cmd = rucio_cmd + ' -rse %s'%rse
-        rucio_output = get_cmd_output(rucio_cmd) + '\n'
+        rucio_rse_cmd = rucio_cmd + ' --rse %s'%rse
+        rucio_output = get_cmd_output(rucio_rse_cmd)
         output += strip_rucio_file_replica_output(rucio_output)
 
-get_did_list_from_file(file_name):
+    return output
+
+def get_did_list_from_file(file_name):
     """
     Grabs DIDs from input file and returns as list
     args:
@@ -183,52 +203,55 @@ get_did_list_from_file(file_name):
     returns:
         (list) - list of DID strings
     """
-    with ifile as open(file_name, 'r'):
-        did_list = [l for l in ifile if line and not line.startswith('#')]
+    with open(file_name, 'r') as ifile:
+        did_list = [l.strip() for l in ifile if l.strip() and not l.startswith('#')]
 
     return did_list
 
-get_ofile_name(did):
+def get_ofile_name(did):
     # Remove scope if it is there
     did_no_scope = did.split(':')[-1]
 
     # format output directory
-    if not args.output_dir.endswith("/"):
-        output_dir = "%s/"%args.output_dir
-    else:
-        output_dir = args.output_dir
-
-    ofile_name = '%s%s.txt'%(output_dir, did)
+    output_dir = os.path.abspath(args.output_dir)
+    ofile_name = '%s/%s.txt'%(output_dir, did_no_scope)
     return ofile_name
 
-strip_rucio_file_replica_output(output_str):
+def strip_rucio_file_replica_output(output):
     # Check for expected format
-    header = output_str[1]
+    if any(SAMPLE_NOT_FOUND_ERROR in line for line in output):
+        print "WARNING :: Sample not found on rucio"
+        return ''
+    elif any('usage: rucio' in line for line in output):
+        print "ERROR :: Rucio call failed\n",output[-1].strip()
+        return '' 
+
+    header = output[1]
     parsed_header = [s.strip() for s in header.split('|') if s.strip()]
-    if parsed_header != REPLICA_INFO:
+    if parsed_header != EXPECTED_REPLICA_INFO:
         print "ERROR (strip_rucio_file_replica_output) :: ",
         print "Unrecognized output format"
 
     # Remove header lines (first 3 lines) and trailing line
-    return output_str[3:-1]
+    return output[3:-1]
 
-strip_rucio_file_replica_missing_output(output_str):
+def strip_rucio_file_replica_missing_output(output):
     # Check for expected format
-    header = output_str[1]
+    header = output[1]
     parsed_header = [s.strip() for s in header.split('|') if s.strip()]
     if parsed_header != MISSING_FILE_INFO:
         print "ERROR (strip_rucio_file_replica_missing_output) :: ",
         print "Unrecognized output format"
 
     # Remove header lines (first 3 lines) and trailing line
-    return output_str[3:-1]
+    return output[3:-1]
 
-parse_rucio_file_replica_info(output_str):
+def parse_rucio_file_replica_info(output_str):
     parsed_info = [s.strip() for s in output_str.split('|') if s.strip()]
 
     # Check for expected format
-    assert len(EXPECTED_REPLICA_INFO) == len(parsed_info),
-    'ERROR (parse_rucio_file_replica_info) :: Unrecognized format'
+    assert len(EXPECTED_REPLICA_INFO) == len(parsed_info), (
+    'ERROR (parse_rucio_file_replica_info) :: Unrecognized format')
 
     # Seperate RSE and link found in last entry
     rse = parsed_info[-1].split(' ')[0][:-1]
@@ -238,7 +261,7 @@ parse_rucio_file_replica_info(output_str):
     assert len(REPLICA_INFO) == len(parsed_info)
     return FileReplicaInfo(*parsed_info)
 
-get_missing_links(did, rse_sites):
+def get_missing_links(did, rse_sites):
     # TODO
     return []
 
@@ -256,10 +279,6 @@ def check_args(args, parser):
         print "ERROR :: Cannot find input file:", args.ifile_name
         sys.exit()
 
-    if args.input_samples: #TESTING
-        print "TESTING :: args.input_sampels = ", args.input_samples
-        sys.exit()
-
     if not os.path.isdir(args.output_dir):
         print "ERROR :: unable to find output directory:", args.output_dir
         sys.exit()
@@ -269,16 +288,16 @@ def rucio_is_setup() :
     default = ""
     rucio_home = os.getenv('RUCIO_HOME', default)
     if rucio_home == default :
-        print "ERROR rucio is not setup, please set it up before running this script"
+        print "ERROR :: rucio is not setup, please set it up before running this script"
         return False
     else :
-        print " > rucio found: %s"%rucio_home
+        print "INFO :: rucio found: %s"%rucio_home
         return True
 
 def grid_proxy_setup() :
     print "Checking for valid grid proxy"
     def print_fail_msg():
-        print "ERROR grid proxy is not setup, please set one up before running this script"
+        print "ERROR :: grid proxy is not setup, please set one up before running this script"
         print "Run : voms-proxy-init -voms atlas -valid 96:00"
         return False
 
@@ -292,7 +311,7 @@ def grid_proxy_setup() :
     if hours_left == 0:
         print_fail_msg()
     else:
-        print "grid proxy found (%d hour(s) left): %s"%(hours_left, proxy)
+        print "INFO :: grid proxy found (%d hour(s) left): %s"%(hours_left, proxy)
         return True
 
 def get_cmd_output(cmd, print_output=False):
@@ -313,8 +332,10 @@ def get_cmd_output(cmd, print_output=False):
 
 def check_environment():
     """ Check if the shell environment is setup as expected """
+    print "===== Checking environment setup ===="
     grid_proxy_setup()
     rucio_is_setup()
+    print ""
 
 
 ################################################################################
@@ -332,14 +353,16 @@ if __name__ == '__main__':
                             help='DID list of samples to process')
         parser.add_argument('-s', '--rse_sites',
                             nargs='+',
-                            help='RSE sites to check. Order by preference')
+                            help='RSE sites to check. Order by preference in case of duplicates')
         parser.add_argument('-m', '--missing',
                             action='store_true',
                             help='Check if any files are missing')
         parser.add_argument('-d', '--output_dir',
                             default='./',
                             help='directory for output sample files')
-        parser.add_argument('--dry_run')
+        parser.add_argument('--overwrite',
+                            action='store_true',
+                            help='allow overwriting of files with same name as output files')
         parser.add_argument('-v', '--verbose',
                             action='store_true', default=False,
                             help='verbose output')
