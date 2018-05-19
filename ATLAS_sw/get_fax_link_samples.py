@@ -1,11 +1,16 @@
 #!/usr/bin/env python
-import pdb
 """
 ================================================================================
 
 get_fax_link_samples.py
 
 Creates txt file of fax links for all files in each of the provided datasets
+
+In cases where there are duplicates files on multiple sites, an attempt is made
+to automatically select a prefered site by picking sites that have the most
+files for the sample in question. In these cases, it is probably better to manually 
+input the preferred site using the --rse_sites option where the order of sites 
+provided is treated as the preference for sites. 
 
 Examples:
     Simple use cases:
@@ -15,11 +20,11 @@ Examples:
 
     Using the options:
 
-    - Getting links for a specific site
-    >> get_fax_link_samples.py -i DID1 -s MWT2_UC_SCRATCHDISK
+    - Getting links for a specific site and checking for missing samples
+    >> get_fax_link_samples.py -i DID -s MWT2_UC_SCRATCHDISK SLACXRD_SCRATCHDISK
 
     - Output fax-link files into a specific directory
-    >> get_fax_link_samples.py -f file_with_DIDs.txt -d /other/dir/for/output/
+    >> get_fax_link_samples.py -i DID -d /other/dir/for/output/
 
     - Check if any of the datasets have missing links. This increases run time
       but is useful if you use the -rse_site option
@@ -149,15 +154,6 @@ def get_did_links(did, rse_sites):
     rucio_cmd = 'rucio list-file-replicas %s'%did
     rucio_cmd += ' --protocols root'
 
-    # Note if any files are missing
-    if args.missing:
-        missing_links = check_for_missing_files(rucio_cmd, args.rse_sites)
-        if missing_links:
-            n_missing = len(missing_links)
-            n_total = len(missing_links) + len(links)
-            print "WARNING :: unable to find %d/%d files"%(n_missing, n_total)
-        else:
-            print "TESTING :: No missing links"
 
     output = []
     if not rse_sites:
@@ -168,7 +164,23 @@ def get_did_links(did, rse_sites):
 
     replica_files = [parse_rucio_file_replica_info(x) for x in output]
     replica_files = remove_duplicates(replica_files, rse_sites)
+    
+
+    # Check for missing files if the sample was found
+    sample_exists = all(SAMPLE_NOT_FOUND_ERROR not in x for x in rucio_output)
+    if args.missing and sample_exists:
+        # Determine rse sites to consider when looking for missing files 
+        if args.rse_sites:
+            rse_sites = args.rse_sites
+        else:
+            rse_sites = list(set([x.rse for x in replica_files]))
+
+        # Printout out indicating if files are missing
+        check_for_missing_files(rucio_cmd, rse_sites)
+    
+    # Format link information
     links = [x.link for x in replica_files]
+
     return links
 
 def get_ofile_name(did):
@@ -194,40 +206,42 @@ def get_ofile_name(did):
 
 #######################################
 def check_for_missing_files(rucio_cmd, rse_sites):
-    """ Find files for which links cannot be found on any site
+    """ Find files for which links cannot be found on specific sites
 
     args:
         rucio_cmd (str) : rucio command formated for the desired dataset
-        rse_sites (list) - list of grid site names to search
+        rse_sites (list) - list of grid site names to search 
 
     returns:
         (list) - list of file names not found on any grid site
     """
+    
     # format rucio command
     rucio_missing_cmd = rucio_cmd + ' --missing'
 
     # Get rucio command output for missing files check
-    if not rse_sites:
-        rucio_output = get_cmd_output(rucio_missing_cmd)
+    output = set()
+    for rse in rse_sites:
+        rucio_rse_cmd = rucio_missing_cmd + ' --rse %s'%rse
+        rucio_output = get_cmd_output(rucio_rse_cmd)
         rucio_output = strip_rucio_file_replica_output(rucio_output, MISSING_FILE_INFO)
-        output = set(rucio_output)
-    else:
-        output = set()
-        for rse in rse_sites:
-            rucio_rse_cmd = rucio_missing_cmd + ' --rse %s'%rse
-            rucio_output = get_cmd_output(rucio_rse_cmd)
-            rucio_output = strip_rucio_file_replica_output(rucio_output, MISSING_FILE_INFO)
 
-            # Only count as missing the files missing from all sites
-            if not output:
-                output = set(rucio_output)
-            else:
-                output = output & set(rucio_output)
+        # Only count as missing the files missing from all sites
+        if not output:
+            output = set(rucio_output)
+        else:
+            output = output & set(rucio_output)
 
     # Extract the file names from the rucio output
     missing_links = [parse_rucio_missing_file_replica_info(x) for x in output]
 
-    return missing_links
+    # Indicate if any files are missing
+    if missing_links:
+        n_missing = len(missing_links)
+        n_total = len(output)
+        print "INFO :: Unable to find %d/%d files"%(n_missing, n_total)
+    elif rucio_output:
+        print "INFO :: No missing links"
 
 def strip_rucio_file_replica_output(output, expected_headers):
     """ Remove unwanted headers and trailers from rucio command output
@@ -457,13 +471,16 @@ def grid_proxy_setup() :
         print "INFO :: grid proxy found (%d hour(s) left): %s"%(hours_left, proxy)
         return True
 
-def get_cmd_output(cmd, print_output=False):
+def get_cmd_output(cmd, print_cmd=False, print_output=False):
     """ Return output from shell command """
     tmp_file_dump = 'tmp_shell_command_dump.txt'
     if print_output:
         shell_cmd = '%s |& tee %s'%(cmd, tmp_file_dump)
     else:
         shell_cmd = '%s &> %s'%(cmd, tmp_file_dump)
+
+    if print_cmd: 
+        print shell_cmd
 
     subprocess.call(shell_cmd, shell=True)
     output = []
@@ -477,7 +494,6 @@ def check_environment():
     """ Check if the shell environment is setup as expected """
     grid_proxy_setup()
     rucio_is_setup()
-    print ""
 
 ################################################################################
 # Run main when not imported
@@ -488,7 +504,7 @@ if __name__ == '__main__':
                 description=__doc__,
                 formatter_class=argparse.RawDescriptionHelpFormatter)
         parser.add_argument('-f', '--ifile_name',
-                            help='Input file name of samples to process')
+                            help='Name of file containing DIDs. Blank and commented lines are skipped')
         parser.add_argument('-i', '--input_samples',
                             nargs='+',
                             help='DID list of samples to process')
@@ -497,7 +513,7 @@ if __name__ == '__main__':
                             help='RSE sites to check. Order by preference in case of duplicates')
         parser.add_argument('-m', '--missing',
                             action='store_true',
-                            help='Check if any files are missing')
+                            help='Check files are missing. Useful with the rse_sites option')
         parser.add_argument('-d', '--output_dir',
                             default='./',
                             help='directory for output sample files')
