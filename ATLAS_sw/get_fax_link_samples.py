@@ -154,7 +154,6 @@ def get_did_links(did, rse_sites):
     rucio_cmd = 'rucio list-file-replicas %s'%did
     rucio_cmd += ' --protocols root'
 
-
     output = []
     if not rse_sites:
         rucio_output = get_cmd_output(rucio_cmd)
@@ -167,7 +166,7 @@ def get_did_links(did, rse_sites):
     
 
     # Check for missing files if the sample was found
-    sample_exists = all(SAMPLE_NOT_FOUND_ERROR not in x for x in rucio_output)
+    sample_exists = all(SAMPLE_NOT_FOUND_ERROR not in s for s in output)
     if args.missing and sample_exists:
         # Determine rse sites to consider when looking for missing files 
         if args.rse_sites:
@@ -238,8 +237,7 @@ def check_for_missing_files(rucio_cmd, rse_sites):
     # Indicate if any files are missing
     if missing_links:
         n_missing = len(missing_links)
-        n_total = len(output)
-        print "INFO :: Unable to find %d/%d files"%(n_missing, n_total)
+        print "INFO :: %d files are missing from %s"%(n_missing,str(args.rse_sites))
     elif rucio_output:
         print "INFO :: No missing links"
 
@@ -259,11 +257,11 @@ def strip_rucio_file_replica_output(output, expected_headers):
     # Check if sample was not found by rucio
     if any(SAMPLE_NOT_FOUND_ERROR in line for line in output):
         print "WARNING :: Sample not found on rucio"
-        return []
+        return [SAMPLE_NOT_FOUND_ERROR]
     # Check if rucio command failed for some other reason
     elif any('usage: rucio' in line for line in output):
         print "ERROR :: Rucio call failed\n",output[-1].strip()
-        return []
+        return [SAMPLE_NOT_FOUND_ERROR]
 
     # Check if header categories are as expected
     header = output[1]
