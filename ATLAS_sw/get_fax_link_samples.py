@@ -56,7 +56,8 @@ def main():
     global args
 
     print "===== Checking environment setup ===="
-    check_environment()
+    if not check_environment():
+        sys.exit()
     print ""
 
     print "===== Getting Sample Links ====="
@@ -187,6 +188,8 @@ def get_ofile_name(did):
 
     # Remove scope if it is there
     did_no_scope = did.split(':')[-1]
+    if did_no_scope.endswith('/'):
+        did_no_scope = did_no_scope[:-1]
 
     # add output directory
     output_dir = os.path.abspath(args.output_dir)
@@ -335,7 +338,7 @@ def remove_duplicates(replica_files, rse_sites = []):
             If empty, then order of preference is determined automatically.
 
     returns:
-        (list) - 'replica_files' with unewanted entries removed
+        (list) - 'replica_files' with unwanted entries removed
     """
 
     # Determine how many files are on each site
@@ -345,6 +348,12 @@ def remove_duplicates(replica_files, rse_sites = []):
     # preference not already provided
     if not rse_sites:
         rse_sites = [x[0] for x in rse_count.most_common()]
+
+        # Depriortize SCRATCHDISK sites and priortize LOCALGROUPDISK
+        scratch = [x for x in rse_sites if 'SCRATCHDISK' in x] 
+        local = [x for x in rse_sites if 'LOCALGROUPDISK' in x] 
+        other = [x for x in rse_sites if x not in scratch + local] 
+        rse_sites = local + other + scratch
 
     # Set the rank of each file to allow for comparison
     for file1 in replica_files:
@@ -490,8 +499,8 @@ def get_cmd_output(cmd, print_cmd=False, print_output=False):
 
 def check_environment():
     """ Check if the shell environment is setup as expected """
-    grid_proxy_setup()
-    rucio_is_setup()
+    return (grid_proxy_setup()
+        and rucio_is_setup())
 
 ################################################################################
 # Run main when not imported

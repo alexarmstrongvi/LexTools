@@ -6,6 +6,7 @@ import re
 import subprocess
 from contextlib import contextmanager
 import itertools
+from random import randint
 
 def main():
     print "Testing Tools"
@@ -51,6 +52,7 @@ def grid_proxy_setup() :
         if 'timeleft' in line: break
     else: 
         print_fail_msg()
+        return False
     hours_left = int(line.strip().split(':')[1])
     if hours_left == 0: 
         print_fail_msg()
@@ -60,7 +62,8 @@ def grid_proxy_setup() :
 
 def get_cmd_output(cmd, print_output=False):
     """ Return output from shell command """
-    tmp_file_dump = 'tmp_shell_command_dump.txt'
+    x = randint(1,1000001)
+    tmp_file_dump = 'tmp_shell_command_dump_%d.txt'%x
     if print_output:
         shell_cmd = '%s |& tee %s'%(cmd, tmp_file_dump)
     else:
@@ -312,6 +315,7 @@ def get_sample_group(sample):
     searches['HWW'] = [ ['H125'],['WW'] ]
     searches['Hee'] = [ ['H125'],['ee'] ]
     searches['Hmumu'] = [ ['H125'],['mumu'] ]
+    searches['ttH'] = [['H125'],['ttH']]
     # Drell-Yan
     searches['Drell-Yan -> ee'] = [['DYee']]
     searches['Drell-Yan -> mumu'] = [['DYmumu']]
@@ -326,8 +330,9 @@ def get_sample_group(sample):
     searches['Znunu'] = [['Znunu']]
     # W + jets
     searches['Wjets'] = [['Wplus','Wminus','W(e|mu|tau)nu']]
-    # W + gamma
-    searches['Wgamma'] = [['e', 'mu'],['nu'],['gamma']]
+    # V + gamma
+    searches['Wgamma'] = [['enu', 'munu', 'taunu'],['gamma']]
+    searches['Zgamma'] = [['ee', 'mumu','tautau','nunu'],['gamma']]
     # ttbar
     searches['ttbar'] = [['ttbar','ttW']]
     # single top

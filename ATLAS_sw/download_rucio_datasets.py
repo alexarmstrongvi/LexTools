@@ -151,7 +151,7 @@ def main ():
     for did in local_dids: summary_str += " >> %s\n"%did
     if no_progress_dids: summary_str += "\nDIDs adding nothing new to :\n"
     for did in no_progress_dids: summary_str += " >> %s\n"%did
-    if failed_dids: summary_str += "\nDIDs with not success:\n"
+    if failed_dids: summary_str += "\nDIDs with no success:\n"
     for did in failed_dids: summary_str += " >> %s\n"%did
     #ofile.seek(0)
     ofile.write(summary_str)

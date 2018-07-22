@@ -20,7 +20,6 @@ Licence:
 """
 
 import sys, os, traceback
-import pandas as pd
 import argparse
 import time
 import subprocess
@@ -65,6 +64,10 @@ def main ():
     """ Main Function """ 
     print '\n====== Running check_rucio_status ======\n'
     
+    print "Importing pandas...",
+    import pandas as pd
+    print "Done"
+
     # Initial setup and checks
     global args
     if os.path.exists(args.output):
@@ -174,8 +177,8 @@ def main ():
 # FUNCTIONS
 def check_environment():
     """ Check if the shell environment is setup as expected """
-    tools.rucio_is_setup()
-    tools.grid_proxy_setup()
+    assert tools.rucio_is_setup()
+    assert tools.grid_proxy_setup()
 
 def accept_line(line, search_exp=None):
     """ Check if line grabbed from a file should be used """  
@@ -307,7 +310,7 @@ def get_file_info(sample):
                 continue
 
             # Convert everything to same units
-            units = line.strip().split()[-1]
+            units = line.strip().split()[-1].upper()
             if units=='TB': scale = 1
             elif units=='GB': scale = 1e-3
             elif units=='MB': scale = 1e-6
