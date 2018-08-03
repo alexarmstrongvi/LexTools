@@ -1,7 +1,10 @@
-# pyTools
-Collection of functions useful for various python code
+# LexTools
+Collection of generally useful code
 
-- **ATLAS_sw/** - stuff with rucio
-- **ROOT/** - stuff with pyROOT and root files
-- **shell/** - various shell commands and environment checks
-- **pyToolsBasic** - dumping ground for all unorganized functions
+- **ATLAS_sw/** - helpful scripts for tools that require setupATLAS
+- **bashTools/** - tools for bash scripts and bash CLI
+- **cppTools/** - general cpp tools 
+- **pyRootTools** - python tools that require "import ROOT"
+- **pyTools** - general python tools
+- **rootTools/** - cpp tools that use ROOT 
+
