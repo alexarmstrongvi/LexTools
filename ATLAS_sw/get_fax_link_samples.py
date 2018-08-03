@@ -72,7 +72,11 @@ def main():
     for ii, did in enumerate(did_list):
         print "[%d/%d] Getting links for %s"%(ii+1, n_dids, did)
 
-        links = get_did_links(did, args.rse_sites)
+        if args.prefix:
+            links = [args.prefix + x for x in get_did_file_names(did)]
+        else:
+            links = get_did_links(did, args.rse_sites)
+
         # skip if no information found for DID
         if not links: continue
 
@@ -137,6 +141,20 @@ def get_did_list_from_file(file_name):
         did_list = [l.strip() for l in ifile if l.strip() and not l.startswith('#')]
 
     return did_list
+
+def get_did_file_names(did):
+    """
+    TODO: add description
+    """
+    rucio_cmd = 'rucio list-files --csv %s' % did
+    rucio_output = get_cmd_output(rucio_cmd)
+
+    # list-files output with csv option follows expected format:
+    # FileName, GUID, ADLER32, FileSize, Events
+    # column is "None" if no value is available
+    output = [x.split(",")[0] for x in rucio_output]
+
+    return output
 
 def get_did_links(did, rse_sites):
     """ Get the fax links for a dataset
@@ -454,7 +472,7 @@ def rucio_is_setup() :
     if rucio_home == default :
         print "ERROR :: rucio is not setup, please set it up before running this script"
         return False
-    else :
+    else:
         print "INFO :: rucio found: %s"%rucio_home
         return True
 
@@ -524,6 +542,8 @@ if __name__ == '__main__':
         parser.add_argument('-d', '--output_dir',
                             default='./',
                             help='directory for output sample files')
+        parser.add_argument('-p', '--prefix',
+                            help='FAX prefix to use for all files')
         parser.add_argument('--overwrite',
                             action='store_true',
                             help='allow overwriting of files with same name as output files')
