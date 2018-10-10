@@ -543,7 +543,7 @@ if __name__ == '__main__':
                             default='./',
                             help='directory for output sample files')
         parser.add_argument('-p', '--prefix',
-                            help='FAX prefix to use for all files')
+                            help='FAX prefix to use for all files (root://atlfax.slac.stanford.edu//atlas/rucio/)')
         parser.add_argument('--overwrite',
                             action='store_true',
                             help='allow overwriting of files with same name as output files')
