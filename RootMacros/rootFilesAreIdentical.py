@@ -18,6 +18,9 @@ import ROOT as r
 from tabulate import tabulate
 from collections import OrderedDict
 
+#
+n_entries_to_check = 10 # number of randomly selected entries to compare
+
 # User Argument defaults and help information
 _help_ifile1_path = '1st input file for comparison'
 _help_ifile2_path = '2nd input file for comparison'
@@ -70,8 +73,9 @@ def main ():
         
         elif both_of_type(obj1, obj2, r.TTree):
             tree_name, tree1, tree2 = key, obj1, obj2
-            
             ####################################################################
+            load_ttree_branches(tree1) 
+            load_ttree_branches(tree2) 
             n_entries1 = tree1.GetEntries()
             n_entries2 = tree2.GetEntries()
             if n_entries1 != n_entries2:
@@ -99,7 +103,7 @@ def main ():
             elif not ttree_is_flat(tree2):
                 log.info("%s from %s is not a flat tree" % (tree_name, ifile2.GetName()))
                 break
-
+            
             ####################################################################
             if not ttrees_are_identicial(tree1, tree2, branches, n_entries):
                 log.info("The TTree %s is different between files" % (tree_name))
@@ -304,33 +308,94 @@ def hist_to_dict(hist, add_overflow=False, bin_range_keys=False):
         log.warning("Histogram type not recognized: %s" % type(hist))
     return h_dict
 
+def load_ttree_branches(t):
+    # Not all branches, particularly those of type ROOT.vectors, are not loaded 
+    # in after getting a ttree from a file. Therefore, calling ttree.vec_branch 
+    # will raise an AttributeError. The loading of branches can be forced by 
+    # starting a loop over the tree. As a result of this, all branches will have
+    # there first value loaded in
+    for entry in t: break
+
 def ttree_is_flat(t):
     branch_names = get_set_of_ttree_branch_names(t)
     for bn in branch_names:
         exec("br_type = type(t.%s)" % bn)
-        if br_type != int and br_type != float:
+        log.debug("Branch %s is of type %s" % (bn, str(br_type)))
+        if br_type not in [int, float, r.vector("int"), r.vector("float")]:
             log.warning("Branch %s of ttree %s is of non-primitive type %s" % (bn, t.GetName(), br_type))
             return False
     return True
 
 def ttrees_are_identicial(t1, t2, branch_names, n_entries):
+    vec_branch_names = get_vector_branches(t1, branch_names)
     #for ii, (entry1, entry2) in enumerate(zip(t1, t2)):
+    n_entries = t1.GetEntries()
+    buf = len(str(n_entries))
+    import time
+    start_time = time.clock()
+    import random
+    n_entries_to_process = n_entries if n_entries < n_entries_to_check else n_entries_to_check
+    rand_entries_to_process = random.sample(range(n_entries), n_entries_to_process)
+    
+    log.info("Comparing ttree %s. This can take some time as pyROOT loops slowly" % t1.GetName())
     for ii, entry1 in enumerate(t1):
+        # pyROOT is slow so here is some info to track how bad things are
+        #if ii in [0,1,2] or (ii)%10==9 or ii == n_entries-1:
+        if ii == 0 or ii == n_entries-1 or ii in rand_entries_to_process:
+            perc = (ii+1.0)/n_entries*100.0
+            tot_time = time.clock() - start_time
+            rate = ii / tot_time if tot_time else 0
+            log.info("Processing %*d/%*d events (%3.f%%) [rate = %.3fHz]" % (buf, ii+1, buf, n_entries, perc, rate))
+        else:
+            continue
+        if ii not in rand_entries_to_process: continue
+        # Where the magic happens 
         for jj, entry2 in enumerate(t2):
             if jj < ii: continue
             if jj > ii: break 
             for bn in branch_names:
                 exec("v1 = entry1.%s" % bn)
                 exec("v2 = entry2.%s" % bn)
-                if not close_enough(v1, v2, 1e-06):
-                    # precision of log msg should similar to close_enough function
-                    log.debug("Branch %s differs for row %d: %.7f vs %.7f" % (bn, ii, v1, v2))
-                    return False
+                if bn in vec_branch_names:
+                    if not vec_branches_are_identical(v1, v2, bn, ii): return False
                 else:
-                    log.debug("Branch %s is the same for row %d: %.7f vs %.7f" % (bn, ii, v1, v2))
+                    if not num_branches_are_identical(v1, v2, bn, ii): return False
     return True
 
+def get_vector_branches(t, branch_names):
+    vec_branch_names = []
+    for bn in branch_names:
+        exec("br_type = type(t.%s)" % bn)
+        if br_type in [r.vector("int"), r.vector("float")]:
+            vec_branch_names.append(bn)
+    return vec_branch_names
+
+def vec_branches_are_identical(vec1, vec2, bname, row):
+    if len(vec1) != len(vec2):
+        log.debug("Branch %s differs for row %d: vector size = %d vs %d" % (bname, row, len(vec1), len(vec2)))
+        return False
+    for idx, (e1, e2) in enumerate(zip(vec1, vec2)):
+        if not close_enough(e1, e2, 1e-06):
+            # precision of log msg should similar to close_enough function
+            log.debug("Branch %s differs for row %d and idx %d: %.7f vs %.7f" % (bname, row, idx, e1, e2))
+            return False
+        log.debug("Branch %s is the same for row %d: %s vs %s" % (bname, row, vec1, vec2))
+    return True
+
+def num_branches_are_identical(num1, num2, bname, row):
+    if not close_enough(num1, num2, 1e-06):
+        # precision of log msg should similar to close_enough function
+        log.debug("Branch %s differs for row %d: %.7f vs %.7f" % (bname, row, num1, num2))
+        return False
+    log.debug("Branch %s is the same for row %d: %.7f vs %.7f" % (bname, row, num1, num2))
+    return True
+
+
 def close_enough(a, b, rel_tol=1e-12, abs_tol=0.0):
+    if a == float("inf") and b == float("inf"):
+        return True
+    if a == float("-inf") and b == float("-inf"):
+        return True
     return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 def log_name_diff(name_set1, name_set2, label1 = "input 1", label2 = "input 2"):
