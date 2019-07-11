@@ -321,7 +321,7 @@ def ttree_is_flat(t):
     for bn in branch_names:
         exec("br_type = type(t.%s)" % bn)
         log.debug("Branch %s is of type %s" % (bn, str(br_type)))
-        if br_type not in [int, float, r.vector("int"), r.vector("float")]:
+        if br_type not in [int, float, r.vector("int"), r.vector("float"), r.vector("double")]:
             log.warning("Branch %s of ttree %s is of non-primitive type %s" % (bn, t.GetName(), br_type))
             return False
     return True
@@ -329,25 +329,20 @@ def ttree_is_flat(t):
 def ttrees_are_identicial(t1, t2, branch_names, n_entries):
     vec_branch_names = get_vector_branches(t1, branch_names)
     #for ii, (entry1, entry2) in enumerate(zip(t1, t2)):
-    n_entries = t1.GetEntries()
+    n_entries = int(t1.GetEntries())
     buf = len(str(n_entries))
     import time
     start_time = time.clock()
     import random
-    n_entries_to_process = n_entries if n_entries < n_entries_to_check else n_entries_to_check
-    rand_entries_to_process = random.sample(range(n_entries), n_entries_to_process)
+    # pyROOT is slow so only check a few events
+    n_entries_to_process = n_entries if n_entries <= n_entries_to_check else n_entries_to_check
+    rand_entries_to_process = sorted(random.sample(range(n_entries), n_entries_to_process))
+    rand_entries_to_process[0] = 0
+    rand_entries_to_process[-1] = n_entries-1
     
-    log.info("Comparing ttree %s. This can take some time as pyROOT loops slowly" % t1.GetName())
+    log.info("Comparing %d random events from ttree %s" % (n_entries_to_process, t1.GetName()))
+    count = 0
     for ii, entry1 in enumerate(t1):
-        # pyROOT is slow so here is some info to track how bad things are
-        #if ii in [0,1,2] or (ii)%10==9 or ii == n_entries-1:
-        if ii == 0 or ii == n_entries-1 or ii in rand_entries_to_process:
-            perc = (ii+1.0)/n_entries*100.0
-            tot_time = time.clock() - start_time
-            rate = ii / tot_time if tot_time else 0
-            log.info("Processing %*d/%*d events (%3.f%%) [rate = %.3fHz]" % (buf, ii+1, buf, n_entries, perc, rate))
-        else:
-            continue
         if ii not in rand_entries_to_process: continue
         # Where the magic happens 
         for jj, entry2 in enumerate(t2):
@@ -360,13 +355,19 @@ def ttrees_are_identicial(t1, t2, branch_names, n_entries):
                     if not vec_branches_are_identical(v1, v2, bn, ii): return False
                 else:
                     if not num_branches_are_identical(v1, v2, bn, ii): return False
+        # Log progress and rate
+        count += 1
+        perc = (ii+1.0)/n_entries*100.0
+        tot_time = time.clock() - start_time
+        rate = tot_time / count
+        log.info("Processing event %*d of %d (%3.f%%) [rate = %.3fsec/evt]" % (buf, ii+1, n_entries, perc, rate))
     return True
 
 def get_vector_branches(t, branch_names):
     vec_branch_names = []
     for bn in branch_names:
         exec("br_type = type(t.%s)" % bn)
-        if br_type in [r.vector("int"), r.vector("float")]:
+        if br_type in [r.vector("int"), r.vector("float"), r.vector("double")]:
             vec_branch_names.append(bn)
     return vec_branch_names
 
