@@ -2,9 +2,11 @@
 #source ~/LexTools/ATLAS_sw/rucio_replicate_samples.sh replicate_these_susynts.txt
 #cat failed_tasks.txt | grep -oP [0-9]{4} | panda-resub-taskid
 
+ifile=${1}
+echo "Getting rule status for samples listed in $ifile"
 rucio list-rules --account alarmstr > rucio_rules.txt
-rm replica_status_completed_tasks.txt
-while IFS= read -r did; do cat rucio_rules.txt | grep "$did " >> replica_status_completed_tasks.txt; done < complete_tasks.txt
+> replica_status_completed_tasks.txt
+for s in $(cat $ifile); do echo $s; grep $s rucio_rules.txt >> replica_status_completed_tasks.txt; done
 
 echo ""
 echo -n "Number of results replicating " 
