@@ -95,3 +95,18 @@ remove_PATH_duplicates() {
       unset old_PATH x
     fi
 }
+remove_PYTHONPATH_duplicates() {
+    if is_not_empty "$PYTHONPATH"; then
+      old_PYTHONPATH=$PYTHONPATH:; PYTHONPATH=
+      while is_not_empty "$old_PYTHONPATH"; do
+        x=${old_PYTHONPATH%%:*}       # the first remaining entry
+        case $PYTHONPATH: in
+          *:"$x":*) ;;         # already there
+          *) PYTHONPATH=$PYTHONPATH:$x;;    # not there yet
+        esac
+        old_PYTHONPATH=${old_PYTHONPATH#*:}
+      done
+      PYTHONPATH=${PYTHONPATH#:}
+      unset old_PYTHONPATH x
+    fi
+}
