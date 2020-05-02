@@ -97,15 +97,16 @@ def main ():
                 branches = branches1
 
             ####################################################################
-            if not ttree_is_flat(tree1):
+            non_primative_branches = set()
+            if not ttree_is_flat(tree1, non_primative_branches):
                 log.info("%s from %s is not a flat tree" % (tree_name, ifile1.GetName()))
                 break
-            elif not ttree_is_flat(tree2):
+            elif not ttree_is_flat(tree2, non_primative_branches):
                 log.info("%s from %s is not a flat tree" % (tree_name, ifile2.GetName()))
                 break
             
             ####################################################################
-            if not ttrees_are_identicial(tree1, tree2, branches, n_entries):
+            if not ttrees_are_identicial(tree1, tree2, branches, n_entries, non_primative_branches):
                 log.info("The TTree %s is different between files" % (tree_name))
                 break
         
@@ -316,17 +317,18 @@ def load_ttree_branches(t):
     # there first value loaded in
     for entry in t: break
 
-def ttree_is_flat(t):
+def ttree_is_flat(t, non_primative_branches):
     branch_names = get_set_of_ttree_branch_names(t)
     for bn in branch_names:
+        if bn in non_primative_branches: continue
         exec("br_type = type(t.%s)" % bn)
         log.debug("Branch %s is of type %s" % (bn, str(br_type)))
         if br_type not in [int, float, r.vector("int"), r.vector("float"), r.vector("double")]:
-            log.warning("Branch %s of ttree %s is of non-primitive type %s" % (bn, t.GetName(), br_type))
-            return False
+            log.warning("Branch %s of ttree %s is of non-primitive type %s. Ignoring this branch" % (bn, t.GetName(), br_type))
+            non_primative_branches.add(bn)
     return True
 
-def ttrees_are_identicial(t1, t2, branch_names, n_entries):
+def ttrees_are_identicial(t1, t2, branch_names, n_entries, non_primative_branches):
     vec_branch_names = get_vector_branches(t1, branch_names)
     #for ii, (entry1, entry2) in enumerate(zip(t1, t2)):
     n_entries = int(t1.GetEntries())
@@ -349,6 +351,7 @@ def ttrees_are_identicial(t1, t2, branch_names, n_entries):
             if jj < ii: continue
             if jj > ii: break 
             for bn in branch_names:
+                if bn in non_primative_branches: continue
                 exec("v1 = entry1.%s" % bn)
                 exec("v2 = entry2.%s" % bn)
                 if bn in vec_branch_names:
