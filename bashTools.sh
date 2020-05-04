@@ -46,7 +46,7 @@ reset="$(tput sgr0)"
 
 red="$(tput setaf 1)"
 green="$(tput setaf 2)"
-tan="$(tput setaf 3)"
+yellow="$(tput setaf 3)"
 blue="$(tput setaf 4)"
 purple="$(tput setaf 5)"
 grey="$(tput setaf 6)"
@@ -58,7 +58,7 @@ underlinef() { echo -e "${underline}$*${reset}"; }
 
 redf()    { echo -e "${red}$*${reset}"; }
 greenf()  { echo -e "${green}$*${reset}"; }
-tan()     { echo -e "${tan}$*${reset}"; }
+yellow()     { echo -e "${yellow}$*${reset}"; }
 bluef()   { echo -e "${blue}$*${reset}"; }
 purplef() { echo -e "${purple}$*${reset}"; }
 greyf()   { echo -e "${grey}$*${reset}"; }
@@ -72,19 +72,13 @@ e_arrow() {
     printf "➜ $@\n"
 }
 e_success() {
-    echo -e "${green}✔ $*${reset}"
+    printf "${green}✔ %s${reset}\n" "$@"
 }
 e_error() {
     printf "${red}✖ %s${reset}\n" "$@"
 }
 e_warning() {
-    printf "${tan}➜ %s${reset}\n" "$@"
-}
-e_underline() {
-    printf "${underline}${bold}%s${reset}\n" "$@"
-}
-e_bold() {
-    printf "${bold}%s${reset}\n" "$@"
+    printf "${yellow}➜ %s${reset}\n" "$@"
 }
 e_note() {
     printf "${underline}${bold}${blue}Note:${reset}  ${blue}%s${reset}\n" "$@"
@@ -96,7 +90,6 @@ seek_confirmation() {
   printf "\n${bold}$@${reset}"
   read -p " (y/n) " -n 1
   printf "\n"
-  is_confirmed
 }
 # Test whether the result of an 'ask' is a confirmation
 is_confirmed() {

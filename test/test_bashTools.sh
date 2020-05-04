@@ -78,22 +78,27 @@ function testUsefulFunctions() {
     echo
     redf "Red Text"
     greenf "Green Text"
-    tan "Tan Text"
+    yellow "Yellow Text"
     bluef "Blue Text"
     purplef "Purple Text"
     greyf "Grey Text"
     whitef "White Text"
+    boldf "Bold Text"
+    underlinef "Underlined Text"
 
     e_header "Header Text"
     e_arrow "Arrow Text"
     e_success "Success Text"
     e_error "Error Text"
     e_warning "Warning Text"
-    e_underline "Underline Text"
-    e_bold "Bold Text"
     e_note "Note Text"
 
-    if seek_confirmation "Yes or no?"; then e_success "Yes"; else e_error "No"; fi
+    seek_confirmation "Yes or no?"
+    if is_confirmed; then 
+        e_success "Yes"
+    else 
+        e_error "No"
+    fi
 
     return 0
 }
