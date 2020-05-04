@@ -64,8 +64,13 @@ def main ():
     """ Main Function """ 
     print '\n====== Running check_rucio_status ======\n'
     
-    print "Importing pandas...",
-    import pandas as pd
+    print "Importing pandas..."
+    try:
+        import pandas as pd
+    except ImportError:
+        print "ERROR :: Failed to import pandas"
+        print "INFO :: Try setting up with lsetup \"lcgenv -p LCG_90 x86_64-slc6-gcc62-opt pandas\""
+        sys.exit()
     print "Done"
 
     # Initial setup and checks

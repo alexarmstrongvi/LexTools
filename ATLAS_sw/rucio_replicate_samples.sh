@@ -8,11 +8,12 @@ SITES=""
 #SITES="$SITES AGLT2_SCRATCHDISK"
 #SITES="$SITES AGLT2_LOCALGROUPDISK"
 SITES="$SITES MWT2_UC_LOCALGROUPDISK"
-SITES="$SITES SLACXRD_LOCALGROUPDISK"
+#SITES="$SITES SLACXRD_LOCALGROUPDISK"
 #SITES="cloud=US&type=LOCALGROUPDISK"
 #SITES="TOKYO-LCG2_PERF-MUONS"
+#SITES="$SITES MPPMU_PERF-MUONS"
 
-#usr="$USER"
+usr="$USER"
 #usr="perf-muons"
 while IFS='' read -r dataset || [[ -n "$dataset" ]]; do
     # Skip blank lines or lines starting with #
@@ -22,7 +23,7 @@ while IFS='' read -r dataset || [[ -n "$dataset" ]]; do
     
     # Replicate dataset to each site in SITES
     for site in $SITES; do
-        cmd="rucio add-rule $dataset 1 $site --grouping ALL"
+        cmd="rucio add-rule $dataset 1 $site --account $usr --grouping ALL"
         echo "$cmd"
         $cmd
     done

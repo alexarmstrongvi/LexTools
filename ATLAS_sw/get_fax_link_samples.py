@@ -329,7 +329,7 @@ def parse_rucio_file_replica_info(output_str):
 
     # Check for expected format
     assert len(EXPECTED_REPLICA_INFO) == len(parsed_info), (
-    'ERROR (parse_rucio_file_replica_info) :: Unrecognized format')
+    'ERROR (parse_rucio_file_replica_info) :: Unrecognized format\n', output_str)
 
     # Seperate RSE and link found in last entry
     rse = parsed_info[-1].split(' ')[0][:-1]
