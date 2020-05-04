@@ -93,13 +93,19 @@ seek_confirmation() {
 }
 # Test whether the result of an 'ask' is a confirmation
 is_confirmed() {
-if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-  return 0
-fi
-return 1
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+      return 0
+    fi
+    return 1
 }
 
 # Utilities
+cmd_exists() {
+    if [ $(type -P $1) ]; then
+        return 0
+    fi
+    return 1
+}
 remove_PATH_duplicates() {
     if is_not_empty "$PATH"; then
       old_PATH=$PATH:; PATH=

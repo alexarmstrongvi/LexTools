@@ -16,8 +16,7 @@ function oneTimeSetUp() {
     cd $test_dir
     echo "Hello World" > $test_file
     cd ..
-    echo "Area setup of $test_dir"
-    ls -R $test_dir
+    #echo "DEBUG :: Area setup of $test_dir"; ls -R $test_dir
 }
 
 function testUsefulFunctions() {
@@ -93,11 +92,18 @@ function testUsefulFunctions() {
     e_warning "Warning Text"
     e_note "Note Text"
 
-    seek_confirmation "Yes or no?"
+    echo
+    if cmd_exists 'git'; then
+        e_success "\"git\" command found"
+    else
+        e_error "\"git\" cmd does not exist"
+    fi
+
+    seek_confirmation "Test reading user input. Print a success message?"
     if is_confirmed; then 
-        e_success "Yes"
+        e_success "Success message"
     else 
-        e_error "No"
+        e_error "Success message not requested"
     fi
 
     return 0
