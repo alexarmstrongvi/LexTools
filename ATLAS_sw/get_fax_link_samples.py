@@ -8,9 +8,9 @@ Creates txt file of fax links for all files in each of the provided datasets
 
 In cases where there are duplicates files on multiple sites, an attempt is made
 to automatically select a prefered site by picking sites that have the most
-files for the sample in question. In these cases, it is probably better to manually 
-input the preferred site using the --rse_sites option where the order of sites 
-provided is treated as the preference for sites. 
+files for the sample in question. In these cases, it is probably better to manually
+input the preferred site using the --rse_sites option where the order of sites
+provided is treated as the preference for sites.
 
 Examples:
     Simple use cases:
@@ -78,7 +78,9 @@ def main():
             links = get_did_links(did, args.rse_sites)
 
         # skip if no information found for DID
-        if not links: continue
+        if not links:
+            print "WARNING :: No files found for", did
+            continue
 
         ofile_name = get_ofile_name(did)
 
@@ -182,12 +184,11 @@ def get_did_links(did, rse_sites):
 
     replica_files = [parse_rucio_file_replica_info(x) for x in output]
     replica_files = remove_duplicates(replica_files, rse_sites)
-    
 
     # Check for missing files if the sample was found
     sample_exists = all(SAMPLE_NOT_FOUND_ERROR not in s for s in output)
     if args.missing and sample_exists:
-        # Determine rse sites to consider when looking for missing files 
+        # Determine rse sites to consider when looking for missing files
         if args.rse_sites:
             rse_sites = args.rse_sites
         else:
@@ -195,7 +196,7 @@ def get_did_links(did, rse_sites):
 
         # Printout out indicating if files are missing
         check_for_missing_files(rucio_cmd, rse_sites)
-    
+
     # Format link information
     links = [x.link for x in replica_files]
 
@@ -230,12 +231,12 @@ def check_for_missing_files(rucio_cmd, rse_sites):
 
     args:
         rucio_cmd (str) : rucio command formated for the desired dataset
-        rse_sites (list) - list of grid site names to search 
+        rse_sites (list) - list of grid site names to search
 
     returns:
         (list) - list of file names not found on any grid site
     """
-    
+
     # format rucio command
     rucio_missing_cmd = rucio_cmd + ' --missing'
 
@@ -244,6 +245,7 @@ def check_for_missing_files(rucio_cmd, rse_sites):
     for rse in rse_sites:
         rucio_rse_cmd = rucio_missing_cmd + ' --rse %s'%rse
         rucio_output = get_cmd_output(rucio_rse_cmd)
+        if not "ERROR\\tstring indices must be integers" in rucio_output[0]: continue
         rucio_output = strip_rucio_file_replica_output(rucio_output, MISSING_FILE_INFO)
 
         # Only count as missing the files missing from all sites
@@ -368,9 +370,9 @@ def remove_duplicates(replica_files, rse_sites = []):
         rse_sites = [x[0] for x in rse_count.most_common()]
 
         # Depriortize SCRATCHDISK sites and priortize LOCALGROUPDISK
-        scratch = [x for x in rse_sites if 'SCRATCHDISK' in x] 
-        local = [x for x in rse_sites if 'LOCALGROUPDISK' in x] 
-        other = [x for x in rse_sites if x not in scratch + local] 
+        scratch = [x for x in rse_sites if 'SCRATCHDISK' in x]
+        local = [x for x in rse_sites if 'LOCALGROUPDISK' in x]
+        other = [x for x in rse_sites if x not in scratch + local]
         rse_sites = local + other + scratch
 
     # Set the rank of each file to allow for comparison
@@ -504,7 +506,7 @@ def get_cmd_output(cmd, print_cmd=False, print_output=False):
     else:
         shell_cmd = '%s &> %s'%(cmd, tmp_file_dump)
 
-    if print_cmd: 
+    if print_cmd:
         print shell_cmd
 
     subprocess.call(shell_cmd, shell=True)
