@@ -5,7 +5,7 @@
 # the namespace with every global and module defined in those files.
 # This is a better practice to get used to.
 
-from LexTools.pytools import (
+from LexTools.integer_tools import (
     ndigits,
     pop_digit,
     split_int,
@@ -31,5 +31,6 @@ from LexTools.asciihist import ascii_hist
 from LexTools.loading_bar import LoadingBar
 
 from LexTools.other_tools import (
+    pd_display_all,
     get_cmd_output,
 )

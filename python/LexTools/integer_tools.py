@@ -1,9 +1,6 @@
-#!/bin/bash/env python
 import math
 from typing import List
 
-################################################################################
-# Integer tools
 def ndigits(n : int) -> int:
     ''' Get number of digits in integer '''
     if type(n) != int:
@@ -99,9 +96,4 @@ def get_nth_digit(x : int, n : int, from_right=False) -> int:
     
     return d
 
-################################################################################
-# Context managers
-
-################################################################################
-# Environment checks
 
