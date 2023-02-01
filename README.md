@@ -2,14 +2,8 @@
 Collection of generally useful code
 
 - **python/LexTools** - general python tools
-- **bashTools.sh** - tools for bash scripts and bash CLI
-- **cppTools.h** - general cpp tools 
 
-# Bash
-To add functions into any bash shell, run
-```bash
-source ~/LexTools/bashTools.sh
-```
+I use to have bash and C++ tools but those were removed for now.
 
 # Python
 ## Python tools
@@ -29,13 +23,4 @@ This requires installing pytest package.
 
 **Bash**
 Use `shunit`
-
-# ATLAS Tools
-Some of the ROOT functionality requires setting up `atlasrootstyle`. In the same directory containing LexTools, run
-```bash
-git clone ssh://git@gitlab.cern.ch:7999/alarmstr/AtlasRootStyle.git
-cd AtlasRootStyle
-git remote add upstream ssh://git@gitlab.cern.ch:7999/atlas-publications-committee/atlasrootstyle.git
-cd ..
-```
 
