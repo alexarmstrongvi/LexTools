@@ -1,0 +1,4 @@
+outputs:
+    scores_fname : 'override_scores.txt'
+    debug_images:
+        - image3.png

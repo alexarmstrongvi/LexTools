@@ -1,86 +1,94 @@
-from pathlib import Path
+# Standard library
+import sys
+import select
 import time
 import logging
-import shutil
+from typing import Optional, Callable, Any
+from collections.abc import Collection
 
 log = logging.getLogger(__name__)
 
-def require_empty_dir(
-    path: Path, 
-    parents: bool = False,
-    overwrite: bool = False,
-) -> None:
-    # Make directory if it doesn't exist or is empty
-    if not path.is_dir():
-        path.mkdir(parents=parents)
-        return
-    elif not any(path.iterdir()):
-        return
+def request_permission(prompt_prefix: str) -> bool:
+    result = validated_input(
+        prompt_prefix = prompt_prefix,
+        valid_inputs  = ('y','n'),
+        transform     = lambda x : x.lower() if x is not None else None,
+        timeout       = 30,
+        default       = 'n'
+    )
+    return result == 'y'
 
-    if not overwrite:
-        # Check if user wants to delete contents of directory
-        overwrite = request_permission(f'Delete contents of {path}?')
+def validated_input(
+    prompt_prefix: str,
+    valid_inputs: Collection[object],
+    transform: Callable[[Optional[str]], Any] = lambda x : x,
+    timeout: Optional[float] = None,
+    default: Optional[str] = None,
+) -> Optional[str]:
+    '''Get input from user that validated to be an expected value
 
-    files = list(path.iterdir())
-    if overwrite:
-        log.info('Deleting all %d files from %s', len(files), path)
-        time.sleep(2) # Give the user a moment to realize if this was a mistake
-        shutil.rmtree(path)
-    else:
-        raise FileExistsError(
-            f'{len(files)} files found (e.g. {files[0].name}): {path}'
-        )
-
-import concurrent.futures
-import threading
-def request_permission(prompt: str) -> bool:
-    # Not working
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-    #     fn = lambda : input(f'{prompt} [y,n] ') 
-    #     future = executor.submit(fn)
-    #     try:
-    #         result = future.result(timeout=2) == 'y'
-    #     except TimeoutError:
-    #         print('Ran out of time')
-    
-    result = 'n'
-    def fn():
-        nonlocal result
-        result = input(f'{prompt} [y,n] ')
-    input_thread = threading.Thread(target=fn)
-    print('Submitting thread')
-    input_thread.start()
-    input_thread.join(timeout=2)
-    result = result == 'y'
+    Parameters
+    ==========
+    prompt:
+        Prompt prefix that will be appended with valid input values
+    valid_inputs:
+        Valid input values for user to provide
+    transform:
+        Transformation to apply to user input before checking if valid
+    timeout & default:
+        see input_with_timeout()
+    '''
+    prompt = f'{prompt_prefix} [{",".join(map(str, valid_inputs))}] '
+    result = None
+    start = time.perf_counter() # for timeout
+    while result not in valid_inputs:
+        if timeout is not None:
+            timeout = max(0, timeout - (time.perf_counter() - start))
+        result = input_with_timeout(prompt, timeout, default)
+        if transform(result) not in valid_inputs:
+            log.error(f'Unacceptable input, %r', result)
 
     return result
 
+def input_with_timeout(
+    prompt: str,
+    timeout: Optional[float] = None,
+    default: Optional[str] = None,
+) -> Optional[str]:
+    '''Get user input with option to timeout
 
+    Parameters
+    ==========
+    prompt:
+        Prompt printed to standard output without a trailing newline before
+        reading input.
+    timeout:
+        Time (sec) allowed for user to provide input after which a default value
+        is returned. Currently, only supported on UNIX. None implies no timeout.
+    default:
+        The default value returned if the user does not provide input within the
+        timeout limit.
 
-if __name__ == '__main__':
-    import pytest
-    empty_dir = Path('path_to/empty_dir')
+    '''
+    if timeout is None:
+        return input(prompt)
 
-    assert not empty_dir.parent.is_dir()
+    # Code below was largly copied from:
+    # https://stackoverflow.com/questions/15528939/time-limited-input
+    # Write prompt
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
 
-    # Error if parent directory does not exist
-    with pytest.raises(FileNotFoundError):
-        require_empty_dir(empty_dir)
+    # Await user input
+    # select.select() will block until either stdin is ready with user input or
+    # the timeout has occurred. If a timeout occurs, all returned values will be
+    # set to False.
+    ready, _, _ = select.select([sys.stdin], [], [], timeout)
 
-    # Create directory if it does not exist
-    empty_dir.parent.mkdir()
-    assert not empty_dir.is_dir()
-    require_empty_dir(empty_dir)
-    assert empty_dir.is_dir()
-    
-    # Do nothing if directory exists but is empty
-    require_empty_dir(empty_dir)
-    assert empty_dir.is_dir()
-
-    # Error if directory exists and is not empty
-    (empty_dir/'file.txt').write_text('TEST\n')
-    with pytest.raises(FileExistsError):
-        require_empty_dir(empty_dir)
-
-    shutil.rmtree(empty_dir.parent)
-    print('Tests Passed')
+    if ready:
+        result = sys.stdin.readline().rstrip('\n')
+    else:
+        sys.stdout.write('\n')
+        log.warning('User input not provided. Returning default: %s', default)
+        result = default
+    return result

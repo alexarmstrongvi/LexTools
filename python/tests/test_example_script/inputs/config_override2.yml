@@ -1,0 +1,3 @@
+outputs:
+    debug_images:
+        - image1.png

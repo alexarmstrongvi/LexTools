@@ -1,0 +1,32 @@
+inputs:
+    image_dir: ./tests/test_example_script/inputs
+    image_suffix: .png
+    color_mode: RGB
+
+outputs:
+    dir : ./tests/test_example_script/outputs
+    overwrite : False
+    scores_fname : 'scores.txt'
+    debug_images: null
+
+logging:
+    fileConfig : null
+    dictConfig : null
+    # kwargs below passed to logging.basicConfig()
+    format : '%(levelname)8s | %(module)s :: %(message)s'
+    # format : '[%(asctime)s] %(levelname)8s | (%(filename)s) %(message)s'
+    level: DEBUG
+    force: True
+    filename : null #run.log
+    filemode : w
+
+
+preprocessing:
+    kwarg1 : val1
+    kwarg2 : val2
+
+scoring:
+    kwarg1 : val3
+    kwarg2 : val4
+
+

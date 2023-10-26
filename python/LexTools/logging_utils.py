@@ -1,70 +1,68 @@
-import logging
+# Standard library
 from pathlib import Path
-import time
 from traceback import TracebackException
+from typing import Optional
+import logging
+import logging.config
+import re
 import sys
-from typing import Union
+
+# Local
+import git
+
+# Globals
+log = logging.getLogger(__name__)
 
 ################################################################################
 # Configuration
 
-# Name for project's top level logger
-PROJECT_LOGGER_NAME = 'LOG'
-
 # Format options
 #LOG_FMT_DEFAULT ='%(levelname)8s | %(message)s'
-#LOG_FMT_DEFAULT ='%(levelname)8s | %(module)10s :: %(message)s'
+#LOG_FMT_DEFAULT ='%(levelname)8s | %(module)s :: %(message)s'
 #LOG_FMT_DEFAULT ='%(levelname)8s | %(name)s :: %(message)s'
 LOG_FMT_DEFAULT ='%(levelname)8s | %(name_last)s :: %(message)s'
-#LOG_FMT_DEFAULT = '%(levelname)8s | (%(filename)s) %(message)s'
-#LOG_FMT_DEFAULT ='%(levelname)8s | [%(asctime)s] (%(filename)s) %(message)s'
-#LOG_FMT_DEFAULT = "%(levelname)8s | (%(module)s - %(funcName)s()) %(message)s"
+#LOG_FMT_DEFAULT ='[%(asctime)s] %(levelname)8s | (%(filename)s) %(message)s'
 #LOG_FMT_DEFAULT = "%(levelname)8s | (%(module)s:%(funcName)s():L%(lineno)d) %(message)s"
 
-# Disable propogation to root logger so project loggers are isolated (e.g.
-# messages do not get processed by root logger handlers and logger attributes
-# like hasHandlers are not effected by root logger)
-logging.getLogger(PROJECT_LOGGER_NAME).propagate = False
+def configure_logging(
+    output_dir: Optional[Path] = None,
+    fileConfig: Optional[Path] = None,
+    dictConfig: Optional[dict] = None, 
+    **basicConfig,
+) -> None:
+    # Update log files to be within output dir
+    if output_dir is not None:
+        if basicConfig.get('filename'):
+            basicConfig['filename'] = str(output_dir/basicConfig['filename'])
+        if dictConfig is not None:
+            for hcfg in dictConfig.get('handlers',{}).values():
+                if hcfg.get('filename') is not None:
+                    hcfg['filename'] = str(output_dir/hcfg['filename'])
 
-def basic_config(level: Union[int,str] = None, log_path: Path = None):
-    log = logging.getLogger(PROJECT_LOGGER_NAME)
-    if log.hasHandlers():
-        log.warning('Project logger already configured: %s', PROJECT_LOGGER_NAME)
-        return
-    formatter = logging.Formatter(LOG_FMT_DEFAULT)
-    handler = logging.StreamHandler(stream=sys.stdout)
-    handler.setFormatter(formatter)
-    handler.addFilter(RecordAttributeAdder())
-    log.addHandler(handler)
-    if level:
-        if isinstance(level, int):
-            pass
-        elif level.isdigit():
-            level = int(level)
-        else:
-            level = level.upper()
-        log.setLevel(level)
-    if log_path:
-        add_log_file(log, log_path)
-    redirect_exceptions_to_logger(log)
+    if len(basicConfig) > 0:
+        logging.basicConfig(**basicConfig)
+
+    if fileConfig is not None:
+        logging.config.fileConfig(fileConfig)
+    
+    if dictConfig is not None:
+        logging.config.dictConfig(**dictConfig)
+    
+    n_args = sum(map(bool, (fileConfig, dictConfig, basicConfig)))
+    if n_args > 1:
+        log.warning(
+            '%d logging configurations provided. '
+            'Order called: basicConfig -> fileConfig -> dictConfig'
+            , n_args
+        )
+    
+    redirect_exceptions_to_logger()
     # Use at your own risk. See function docstring for warnings
-    #capture_python_stdout(log)
-
+    #capture_python_stdout()
+    
 ################################################################################
-def get_logger(name: str = None, level : Union[str, int] = None):
-    if not name or name == '__main__':
-        log = logging.getLogger(PROJECT_LOGGER_NAME)
-    else:
-        # Make all loggers a child of the top level project logger
-        log = logging.getLogger(f'{PROJECT_LOGGER_NAME}.{name}')
-    if level is not None:
-        log.setLevel(level)
-
-    return log
-
-################################################################################
-# General logging utilities
 def level_name(level: int) -> str:
+    name = ''
     if level >= 50:
         name = 'CRITICAL'
     elif level >= 40:
@@ -75,8 +73,6 @@ def level_name(level: int) -> str:
         name = 'INFO'
     elif level >= 10:
         name = 'DEBUG'
-    elif level > 0:
-        name = ''
     elif level == 0:
         name = 'NOTSET'
     sublevel = level % 10
@@ -84,9 +80,12 @@ def level_name(level: int) -> str:
         name += f'+{sublevel}'
     return name
 
-def log_hierarchy_summary_str() -> str:
-    ostr = 'Logger Hierarchy\n'
-    for name in ['root'] + sorted(logging.root.manager.loggerDict):
+def all_logger_names() -> [str]:
+    return ['root'] + sorted(logging.root.manager.loggerDict)
+
+def logging_hierarchy_str():
+    ostr = ''
+    for name in all_logger_names():
         if name == 'root':
             name_last = name
             depth = 0
@@ -94,35 +93,34 @@ def log_hierarchy_summary_str() -> str:
             parts = name.split('.')
             name_last = parts[-1]
             depth = len(parts)
-        if depth > 1 and not name.startswith(PROJECT_LOGGER_NAME):
-            continue
-        tabs = '  ' * depth
-        log = logging.getLogger(name)
-        attr_str = f'lvl={level_name(log.level)}'
-        attr_str += f'; n_handlers={len(log.handlers)}'
-        attr_str += f'; propogate={log.propagate}'
-        ostr += f'{tabs}- {name_last} [{attr_str}]\n'
-    ostr += 'Logger Info\n'
-    for name in ['root'] + sorted(logging.root.manager.loggerDict):
-        log = logging.getLogger(name)
-        ostr += log_summary_str(log) + '\n'
+        tabs = ' ' * 4 * depth
+        logger = logging.getLogger(name)
+        lvl_name = level_name(logger.level)
+        n_handlers = len(logger.handlers)
+        propagate = logger.propagate
+        if (lvl_name, n_handlers, propagate) == ('NOTSET', 0, True):
+            attr_str = ''
+        else:
+            attr_str = f' [{lvl_name}; {n_handlers} handler(s); {propagate = }]'
+        prefix = '' if name == 'root' else f'{tabs}- '
+        ostr += f'{prefix}{name_last!r}{attr_str}\n'
     return ostr
 
-def log_summary_str(log):
-    log_lvl = log.level
-    eff_lvl = log.getEffectiveLevel()
-    min_lvl = min([lvl for lvl  in range(logging.CRITICAL+1) if log.isEnabledFor(lvl)])
+def log_summary_str(logger):
+    log_lvl = logger.level
+    eff_lvl = logger.getEffectiveLevel()
+    min_lvl = min([lvl for lvl  in range(logging.CRITICAL+1) if logger.isEnabledFor(lvl)])
 
-    s  = f'Log Summary - {log.name}'
+    s  = f'Log Summary - {logger.name}'
     s += f'\n - Levels   : Effective = {level_name(eff_lvl)}; Logger = {level_name(log_lvl)}; Enabled for >={level_name(min_lvl)}'
-    s += f'\n - Flags    : Disabled = {log.disabled}'
-    s += f', Propogate = {log.propagate}'
-    s += f', Handlers = {log.hasHandlers()}'
-    #if log.parent:
-    #    s += f'\n - Parent : {log.parent.name}'
-    for i, hndl in enumerate(log.handlers,1):
+    s += f'\n - Flags    : Disabled = {logger.disabled}'
+    s += f', Propagate = {logger.propagate}'
+    s += f', Handlers = {logger.hasHandlers()}'
+    #if logger.parent:
+    #    s += f'\n - Parent : {logger.parent.name}'
+    for i, hndl in enumerate(logger.handlers,1):
         s += f'\n - Handler {i}: {hndl}'
-    for i, fltr in enumerate(log.filters,1):
+    for i, fltr in enumerate(logger.filters,1):
         s += f'\n - Filter {i} : {fltr}'
     return s
 
@@ -130,18 +128,34 @@ def log_multiline(log_call, txt):
     for line in txt.splitlines():
         log_call(line)
 
-################################################################################
-# Configuration utilities
-def add_log_file(logger, path: Path = Path('./')) -> Path:
-    formatter = logging.Formatter(LOG_FMT_DEFAULT)
-    if path.is_dir():
-        path = path / f'run_{time.strftime("%Y%m%d_%H%M%S_%Z")}.log'
-    logger.info("Adding log file: %s", path)
-    file_handler = logging.FileHandler(path)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+def summarize_logging() -> str:
+    return logging_hierarchy_str() + '\n' + log_summary_str(logging.root)
 
-    return path
+def summarize_version_control() -> str:
+    # TODO: Handle multiple version control systems
+    # import version_control
+    # if version_control.SYSTEM is not version_control.VCS.GIT:
+    #     raise NotImplementedError
+
+    ########################################
+    # Git summary
+    git_hash = git.get_hash()
+    git_status = git.get_status()
+    # Remove hints on how to use git from status
+    lines = []
+    for line in git_status.splitlines():
+        line = re.sub(r'\(use "git.*\)','', line)
+        if line.strip():
+            lines.append(line.replace('\t',' '*4))
+    git_status = '\n'.join(lines)
+    summary = (
+        f"Git Hash: {git_hash}"
+        "\n"
+        f"Git Status:\n{git_status}"
+    )
+
+    ########################################
+    return summary
 
 class RecordAttributeAdder(logging.Filter):
     '''Pseudo-Filter that adds useful attributes to log records for formatting'''
@@ -150,7 +164,7 @@ class RecordAttributeAdder(logging.Filter):
         record.name_last = record.name.rsplit('.', 1)[-1]
         return True
 
-def redirect_exceptions_to_logger(logger: logging.Logger):
+def redirect_exceptions_to_logger(logger: logging.Logger = logging.root):
     # Overwrite hook for processing exceptions
     # https://stackoverflow.com/questions/6234405/logging-uncaught-exceptions-in-python
     # https://stackoverflow.com/questions/8050775/using-pythons-logging-module-to-log-all-exceptions-and-errors
@@ -172,7 +186,7 @@ def redirect_exceptions_to_logger(logger: logging.Logger):
 
     sys.excepthook = handle_exception
 
-def capture_python_stdout(log):
+def capture_python_stdout(logger: logging.Logger = logging.root):
     '''Capture all stdout/stderr and send to logger
 
     NOTES/WARNINGS
@@ -181,13 +195,13 @@ def capture_python_stdout(log):
     - This will not capture messages sent directly to terminal stdout/stderr
       instead of via the python streams (see capture_unix_df).
     '''
-    stdout_log = logging.getLogger(f'{log.name}.stdout')
-    stderr_log = logging.getLogger(f'{log.name}.stderr')
+    stdout_log = logging.getLogger(f'{logger.name}.stdout')
+    stderr_log = logging.getLogger(f'{logger.name}.stderr')
 
     # Overwrite python stdout and stderr streams
     # Source: https://stackoverflow.com/questions/19425736/how-to-redirect-stdout-and-stderr-to-logger-in-python
     sys.stdout = LoggerWriter(stdout_log.info)
-    sys.stderr = LoggerWriter(stderr_log.warning) # log.error?
+    sys.stderr = LoggerWriter(stderr_log.warning) # stderr_log.error?
 
 class LoggerWriter(object):
     def __init__(self, writer):
@@ -234,3 +248,4 @@ def capture_unix_fd():
     # These child processes' stdin/stdout are
     os.spawnve("P_WAIT", "/bin/ls", ["/bin/ls"], {})
     os.execve("/bin/ls", ["/bin/ls"], os.environ)
+
