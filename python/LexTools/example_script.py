@@ -31,7 +31,7 @@ DEFAULT_CFG = PACKAGE_DIR/'tests/test_example_script/inputs/config_default.yml'
 
 ################################################################################
 def main():
-    validate_env()
+    validate_environment()
 
     # Load and merge all user configuration options
     args = parse_argv()
@@ -49,7 +49,7 @@ def main():
 
     # Setup
     scripting.require_empty_dir(odir, ocfg['overwrite'])
-    logging_utils.configure_logging(output_dir=odir, **cfg['logging'])
+    logging_utils.configure_logging(output_dir=odir, **ocfg['logging'])
     log.debug('Logging Summary:\n%s', logging_utils.summarize_logging())
 
     # Reproducibility
@@ -67,7 +67,6 @@ def main():
     # just for illustration.
 
     # Run
-    log.critical('TEST')
     img_dir = Path(icfg['image_dir'])
     img_suffix = icfg['image_suffix']
     scores = []
@@ -105,8 +104,8 @@ def save_scores(scores, opath):
 
 ################################################################################
 # Scripting functions that do not generalize well beyond this file
-def validate_env() -> None:
-    '''Validate the program environment'''
+def validate_environment() -> None:
+    '''Validate the program's runtime environment'''
     if os.name == 'nt':
         raise OSError('I have not tested any of this on Windows')
     if 'HOME' not in os.environ:
@@ -131,6 +130,11 @@ def parse_argv() -> argparse.Namespace:
         type = Path,
         help = 'Directory for saving all outputs',
     )
+    parser.add_argument(
+        '-l', '--log-level',
+        choices = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'),
+        help = 'Root logging level',
+    )
     return parser.parse_args()
 
 def override_config(
@@ -145,6 +149,13 @@ def override_config(
         cfg['inputs']['image_dir'] = str(args.input)
     if args.odir:
         cfg['outputs']['dir'] = str(args.odir)
+    if args.log_level:
+        log_cfg = cfg['outputs']['logging']
+        if 'level' in log_cfg:
+            log_cfg['level'] = args.log_level
+        log_cfg = log_cfg['dictConfig']
+        if  log_cfg is not None and log_cfg.get('root'):
+            log_cfg['root']['level'] = args.log_level
     return cfg
 
 def reformat_config(cfg: dict) -> dict:

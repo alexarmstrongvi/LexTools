@@ -188,7 +188,7 @@ def require_empty_dir(
 
     files = list(path.rglob('*'))
     if overwrite:
-        log.info('Deleting all %d files from %s', len(files), path)
+        log.warning('Deleting all %d files from %s', len(files), path)
         time.sleep(2) # Give the user a moment to realize if this was a mistake
         shutil.rmtree(path)
         path.mkdir(parents=parents)

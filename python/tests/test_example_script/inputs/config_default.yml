@@ -8,17 +8,16 @@ outputs:
     overwrite : False
     scores_fname : 'scores.txt'
     debug_images: null
-
-logging:
-    fileConfig : null
-    dictConfig : null
-    # kwargs below passed to logging.basicConfig()
-    format : '%(levelname)8s | %(module)s :: %(message)s'
-    # format : '[%(asctime)s] %(levelname)8s | (%(filename)s) %(message)s'
-    level: DEBUG
-    force: True
-    filename : null #run.log
-    filemode : w
+    
+    logging:
+        fileConfig : null
+        dictConfig : null
+        # kwargs below passed to logging.basicConfig()
+        format : '%(levelname)8s | %(module)s :: %(message)s'
+        level: DEBUG
+        force: True
+        filename : null #run.log
+        filemode : w
 
 
 preprocessing:
